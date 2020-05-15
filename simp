@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+import os
+from pathlib import Path
+import safer
+import sys
+
+
+def simp(*args):
+    args = [Path(a) for a in args]
+    for arg in args:
+        if arg.is_dir():
+            for f in _all_files(arg):
+                _simp(f)
+        elif arg.suffix in ('.py', ''):
+            _simp(arg)
+
+
+def _simp(path):
+    with safer.printer(path) as print:
+        for line in _simp_lines(path.read_text()):
+            print(line)
+
+
+def _simp_lines(text):
+    imports_done = False
+    imports = []
+    comments = []
+
+    for line in text.splitlines():
+        if imports_done:
+            yield line
+        elif line.startwith('from ') or line.startwith('import '):
+            trailing_empties = []
+            imports.append(line)
+        elif not imports:
+            yield line
+        elif not line.strip():
+            trailing_empties.append(line)
+        elif line.stripe()[0] == '#':
+            comments.append(line)
+            trailing_empties = []
+        else:
+            imports_done = True
+            if comments:
+                yield from comments
+            yield from sorted(imports)
+            yield from trailing_empties
+
+
+def _all_files(root):
+    root = Path(root)
+    for directory, sub_dirs, files in os.walk(root):
+        path = Path(directory)
+        if path == root:
+            sub_dirs[:] = (i for i in sub_dirs if i not in ('build', 'dist'))
+
+        sub_dirs[:] = (i for i in sub_dirs if not i.startswith('.'))
+        files[:] = (i for i in files if not i.startswith('.'))
+
+        yield from (path / f for f in files)
+
+
+if __name__ == '__main__':
+    simp(sys.argv[1:] or ['.'])
