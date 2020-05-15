@@ -1,4 +1,4 @@
-import simp
+__version__ = '0.9.0'
 
 _classifiers = [
     'Development Status :: 4 - Beta',
@@ -12,15 +12,15 @@ _classifiers = [
     'Topic :: Utilities',
 ]
 
-with open('requirements.txt') as f:
-    REQUIRED = f.read().splitlines()
-
 if __name__ == '__main__':
     from setuptools import setup
 
+    with open('requirements.txt') as f:
+        REQUIRED = f.read().splitlines()
+
     setup(
         name='simp',
-        version=simp.__version__,
+        version=__version__,
         author='Tom Ritchford',
         author_email='tom@swirly.com',
         url='https://github.com/rec/simp',

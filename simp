@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import os
 from pathlib import Path
+import os
 import safer
 import sys
 
@@ -10,7 +10,8 @@ def simp(args):
     for arg in args:
         if arg.is_dir():
             for f in _all_files(arg):
-                _simp(f)
+                if f.suffix == '.py':
+                    _simp(f)
         elif arg.suffix in ('.py', ''):
             _simp(arg)
 
