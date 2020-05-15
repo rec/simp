@@ -5,7 +5,7 @@ import safer
 import sys
 
 
-def simp(*args):
+def simp(args):
     args = [Path(a) for a in args]
     for arg in args:
         if arg.is_dir():
@@ -17,34 +17,51 @@ def simp(*args):
 
 def _simp(path):
     with safer.printer(path) as print:
-        for line in _simp_lines(path.read_text()):
+        for line in _process_lines(path.read_text()):
             print(line)
 
 
-def _simp_lines(text):
+def _process_lines(text):
     imports_done = False
     imports = []
     comments = []
+    trailing = []
+    was_blank = True
 
     for line in text.splitlines():
         if imports_done:
             yield line
-        elif line.startwith('from ') or line.startwith('import '):
-            trailing_empties = []
+
+        elif line.startswith('from ') or line.startswith('import '):
+            while trailing and not trailing[0].strip():
+                trailing.pop(0)
+            if trailing:
+                comments.append('')
+                comments.extend(trailing)
+                trailing.clear()
             imports.append(line)
+
         elif not imports:
             yield line
-        elif not line.strip():
-            trailing_empties.append(line)
-        elif line.stripe()[0] == '#':
-            comments.append(line)
-            trailing_empties = []
+            was_blank = not line.strip()
+
+        elif line.strip().startswith('#') or not line.strip():
+            trailing.append(line)
+
         else:
             imports_done = True
+            while comments and not comments[0]:
+                comments.pop(0)
+
             if comments:
+                if not was_blank:
+                    yield ''
                 yield from comments
             yield from sorted(imports)
-            yield from trailing_empties
+            yield from trailing
+            if not trailing or trailing[-1].strip():
+                yield ''
+            yield line
 
 
 def _all_files(root):
