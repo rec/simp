@@ -3,21 +3,30 @@ from pathlib import Path
 import argparse
 import itertools
 import os
-import safer
 import sys
 
 
-def simp(args):
-    for path in _all_files(args):
-        with safer.printer(path) as print:
-            for line in _process_lines(path.read_text()):
-                print(line)
+def simp():
+    args = parse_args()
+    all_files = _all_files(args.targets)
+    changed = unchanged = 0
+    for path in all_files:
+        lines = path.read_text().splitlines()
+        sorted_lines = _sort_imports(lines)
+        if lines == sorted_lines:
+            unchanged += 1
+            continue
+        changed += 1
+        if args.dry_run:
+            d = _short_diff(lines, sorted_lines)
+
+            print(path, *d, sep='\n')
+        else:
+            with open(path, 'w') as fp:
+                print(*sorted_lines, sep='\n', file=fp)
 
 
-BEFORE, OLD, NEW, AFTER = range(4)
-
-
-def process_lines(lines):
+def _sort_imports(lines):
     def is_comment(s):
         s = s.strip()
         return not s or s.startswith('#')
@@ -38,14 +47,9 @@ def process_lines(lines):
         after.insert(0, imports.pop())
 
     comments = [s for s in imports if is_comment(s)]
-    sorted_imports = comments + sorted(s for s in imports if not is_comment(s))
+    imports = [s for s in imports if not is_comment(s)]
 
-    return before, imports, sorted_imports, after
-
-
-def _process_lines(text):
-    before, _, sorted_imports, after = process_lines(text.splitlines())
-    return before + sorted_imports + after
+    return before + comments + sorted(set(imports)) + after
 
 
 def _all_files(args):
@@ -72,27 +76,93 @@ def _one_tree(root):
         yield from (path / f for f in files if f.endswith('.py'))
 
 
-def _args(args=None):
+KEEP, INSERT, REMOVE = ' +-'
+
+
+def _myers_diff(a, b):
+    # Adapted from
+    # https://gist.github.com/adamnew123456/37923cf53f51d6b9af32a539cdfa7cc4
+    front = {1: (0, [])}
+
+    for d in range(0, len(a) + len(b) + 1):
+        for k in range(-d, d + 1, 2):
+            go_down = k == -d or (k != d and front[k - 1][0] < front[k + 1][0])
+
+            if go_down:
+                old_x, history = front[k + 1]
+                x = old_x
+            else:
+                old_x, history = front[k - 1]
+                x = old_x + 1
+
+            history = history[:]
+            y = x - k
+
+            if 1 <= y <= len(b) and go_down:
+                history.append((INSERT, b[y - 1]))
+            elif 1 <= x <= len(a):
+                history.append((REMOVE, a[x - 1]))
+
+            while x < len(a) and y < len(b) and a[x] == b[y]:
+                x += 1
+                y += 1
+                history.append((KEEP, a[x - 1]))
+
+            if x >= len(a) and y >= len(b):
+                return history
+            front[k] = (x, history)
+
+    raise ValueError('Could not find edit script')
+
+
+def _short_diff(a, b, frame=2):
+    diff = _myers_diff(a, b)
+
+    def is_keep(a):
+        return a[0] is KEEP
+
+    def keepers(items):
+        return list(itertools.takewhile(is_keep, items))
+
+    prefix = keepers(diff)
+    suffix = list(reversed(keepers(reversed(diff))))
+    if len(prefix) + len(suffix) >= len(diff):
+        return []
+
+    begin = max(0, len(prefix) - frame)
+    end = len(diff) - len(suffix) + frame
+
+    lines = [(a + b).rstrip() for (a, b) in diff[begin:end]]
+
+    def msg(n):
+        return '[...%d line%s skipped...]' % (n, '' if n == 1 else 's')
+
+    if begin > 0:
+        lines.insert(0, msg(begin))
+    e = len(suffix) - frame
+    if e > 0:
+        lines.append(msg(e))
+
+    return lines
+
+
+def parse_args(args=None):
     p = argparse.ArgumentParser(description=_DESCRIPTION)
 
-    p.add_argument('target-files', default=None, nargs='+', help=_TARGET_HELP)
+    p.add_argument('targets', default=None, nargs='+', help=_TARGETS_HELP)
     p.add_argument('--dry-run', '-d', action='store_true', help=_DRY_RUN_HELP)
-    p.add_argument('--quiet', '-q', action='store_true', help=_QUIET_HELP)
 
     return p.parse_args(args)
 
 
-_DESCRIPTION = 'Sort the import directives in Python source code'
-
-_QUIET_HELP = """\
-If set, don't print any messages or errors"""
+_DESCRIPTION = 'Sort the import directives in Python source files'
 
 _DRY_RUN_HELP = """\
 If set, print the changed files but do not overwrite them."""
 
-_TARGET_HELP = """\
+_TARGETS_HELP = """\
 One or more Python files or directories with Python files."""
 
 
 if __name__ == '__main__':
-    simp(sys.argv[1:] or ['.'])
+    simp()

@@ -1,7 +1,6 @@
 from argparse import Namespace
 from pathlib import Path
 from unittest import TestCase
-import diff
 
 
 def _simp():
@@ -15,28 +14,37 @@ def _simp():
 simp = _simp()
 
 
+def diff(a, b):
+    diff = simp._myers_diff(a, b)
+    return [(a + b).rstrip() for (a, b) in diff]
+
+
+def sort_imports(text):
+    return simp._sort_imports(text.splitlines())
+
+
 class TestSimp(TestCase):
     def test_lines(self):
-        actual = list(simp._process_lines(INPUT))
+        actual = list(sort_imports(INPUT))
         for a in actual:
             print(a)
         expected = OUTPUT.splitlines()
         assert actual == expected
 
     def test_empty(self):
-        assert list(simp._process_lines('')) == []
-        assert list(simp._process_lines('\n')) == ['']
-        assert list(simp._process_lines('\n\n')) == ['', '']
+        assert list(sort_imports('')) == []
+        assert list(sort_imports('\n')) == ['']
+        assert list(sort_imports('\n\n')) == ['', '']
 
 
 class TestDiff(TestCase):
     def test_diff(self):
-        actual = diff.diff(INPUT.splitlines(), OUTPUT.splitlines())
+        actual = diff(INPUT.splitlines(), OUTPUT.splitlines())
         expected = DIFF.splitlines()
         assert actual == expected
 
     def test_short_diff(self):
-        actual = diff.short_diff(INPUT.splitlines(), OUTPUT.splitlines())
+        actual = simp._short_diff(INPUT.splitlines(), OUTPUT.splitlines(), 3)
         expected = SHORT_DIFF.splitlines()
         print(*actual, sep='\n')
         assert actual == expected
@@ -106,5 +114,5 @@ SHORT_DIFF = """\
  import foo.bar
 
  # comment goes BELOW
-[...17 lines skipped...]
+[...2 lines skipped...]
 """
