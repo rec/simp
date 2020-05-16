@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import argparse
+import itertools
 import os
 import safer
 import sys
@@ -12,54 +14,38 @@ def simp(args):
                 print(line)
 
 
+BEFORE, OLD, NEW, AFTER = range(4)
+
+
+def process_lines(lines):
+    def is_comment(s):
+        s = s.strip()
+        return not s or s.startswith('#')
+
+    def is_import(s):
+        return s.startswith('from ') or s.startswith('import ')
+
+    def still_import(s):
+        return is_import(s) or is_comment(s)
+
+    before = list(itertools.takewhile(lambda s: not is_import(s), lines))
+    lines = lines[len(before):]
+
+    imports = list(itertools.takewhile(still_import, lines))
+    after = lines[len(imports):]
+
+    while imports and is_comment(imports[-1]):
+        after.insert(0, imports.pop())
+
+    comments = [s for s in imports if is_comment(s)]
+    sorted_imports = comments + sorted(s for s in imports if not is_comment(s))
+
+    return before, imports, sorted_imports, after
+
+
 def _process_lines(text):
-    imports_done = False
-    before = []
-    imports = []
-    after = []
-    last_line_was_blank = True
-
-    def emit():
-        while before and not before[0]:
-            before.pop(0)
-
-        if before:
-            if not last_line_was_blank:
-                yield ''
-            yield from before
-
-        yield from sorted(imports)
-
-        yield from after
-        if not after or after[-1].strip():
-            yield ''
-
-    for line in text.splitlines():
-        if imports_done:
-            yield line
-
-        elif line.startswith('from ') or line.startswith('import '):
-            while after and not after[0].strip():
-                after.pop(0)
-
-            if after:
-                before.append('')
-                before.extend(after)
-                after.clear()
-
-            imports.append(line)
-
-        elif not imports:
-            last_line_was_blank = not line.strip()
-            yield line
-
-        elif line.strip().startswith('#') or not line.strip():
-            after.append(line)
-
-        else:
-            imports_done = True
-            yield from emit()
-            yield line
+    before, _, sorted_imports, after = process_lines(text.splitlines())
+    return before + sorted_imports + after
 
 
 def _all_files(args):
@@ -84,6 +70,28 @@ def _one_tree(root):
         files[:] = (i for i in files if not i.startswith('.'))
 
         yield from (path / f for f in files if f.endswith('.py'))
+
+
+def _args(args=None):
+    p = argparse.ArgumentParser(description=_DESCRIPTION)
+
+    p.add_argument('target-files', default=None, nargs='+', help=_TARGET_HELP)
+    p.add_argument('--dry-run', '-d', action='store_true', help=_DRY_RUN_HELP)
+    p.add_argument('--quiet', '-q', action='store_true', help=_QUIET_HELP)
+
+    return p.parse_args(args)
+
+
+_DESCRIPTION = 'Sort the import directives in Python source code'
+
+_QUIET_HELP = """\
+If set, don't print any messages or errors"""
+
+_DRY_RUN_HELP = """\
+If set, print the changed files but do not overwrite them."""
+
+_TARGET_HELP = """\
+One or more Python files or directories with Python files."""
 
 
 if __name__ == '__main__':
