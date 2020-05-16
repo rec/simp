@@ -1,24 +1,31 @@
+from argparse import Namespace
 from pathlib import Path
 from unittest import TestCase
 
-_SIMP = {}
-
 
 def _simp():
-    if not _SIMP:
-        text = Path('simp').read_text()
-        compiled = compile(text, 'simp', mode='exec')
-        exec(compiled, _SIMP)
-    return _SIMP
+    text = Path('simp').read_text()
+    compiled = compile(text, 'simp', mode='exec')
+    local = {}
+    exec(compiled, local)
+    return Namespace(**local)
+
+
+simp = _simp()
 
 
 class TestSimp(TestCase):
     def test_lines(self):
-        actual = list(_simp()['_process_lines'](INPUT))
+        actual = list(simp._process_lines(INPUT))
         for a in actual:
             print(a)
         expected = OUTPUT.splitlines()
         assert actual == expected
+
+    def test_empty(self):
+        assert list(simp._process_lines('')) == []
+        assert list(simp._process_lines('\n')) == ['']
+        assert list(simp._process_lines('\n\n')) == ['', '']
 
 
 INPUT = """\

@@ -6,66 +6,74 @@ import sys
 
 
 def simp(args):
-    args = [Path(a) for a in args]
-    for arg in args:
-        if arg.is_dir():
-            for f in _all_files(arg):
-                if f.suffix == '.py':
-                    _simp(f)
-        elif arg.suffix in ('.py', ''):
-            _simp(arg)
-
-
-def _simp(path):
-    with safer.printer(path) as print:
-        for line in _process_lines(path.read_text()):
-            print(line)
+    for path in _all_files(args):
+        with safer.printer(path) as print:
+            for line in _process_lines(path.read_text()):
+                print(line)
 
 
 def _process_lines(text):
     imports_done = False
+    before = []
     imports = []
-    comments = []
-    trailing = []
-    was_blank = True
+    after = []
+    last_line_was_blank = True
+
+    def emit():
+        while before and not before[0]:
+            before.pop(0)
+
+        if before:
+            if not last_line_was_blank:
+                yield ''
+            yield from before
+
+        yield from sorted(imports)
+
+        yield from after
+        if not after or after[-1].strip():
+            yield ''
 
     for line in text.splitlines():
         if imports_done:
             yield line
 
         elif line.startswith('from ') or line.startswith('import '):
-            while trailing and not trailing[0].strip():
-                trailing.pop(0)
-            if trailing:
-                comments.append('')
-                comments.extend(trailing)
-                trailing.clear()
+            while after and not after[0].strip():
+                after.pop(0)
+
+            if after:
+                before.append('')
+                before.extend(after)
+                after.clear()
+
             imports.append(line)
 
         elif not imports:
+            last_line_was_blank = not line.strip()
             yield line
-            was_blank = not line.strip()
 
         elif line.strip().startswith('#') or not line.strip():
-            trailing.append(line)
+            after.append(line)
 
         else:
             imports_done = True
-            while comments and not comments[0]:
-                comments.pop(0)
-
-            if comments:
-                if not was_blank:
-                    yield ''
-                yield from comments
-            yield from sorted(imports)
-            yield from trailing
-            if not trailing or trailing[-1].strip():
-                yield ''
+            yield from emit()
             yield line
 
 
-def _all_files(root):
+def _all_files(args):
+    for arg in args:
+        arg = Path(arg)
+        if arg.is_dir():
+            yield from _one_tree(arg)
+        elif arg.suffix in ('.py', ''):
+            yield arg
+        else:
+            print('Do not understand file', arg, file=sys.stderr)
+
+
+def _one_tree(root):
     root = Path(root)
     for directory, sub_dirs, files in os.walk(root):
         path = Path(directory)
@@ -75,7 +83,7 @@ def _all_files(root):
         sub_dirs[:] = (i for i in sub_dirs if not i.startswith('.'))
         files[:] = (i for i in files if not i.startswith('.'))
 
-        yield from (path / f for f in files)
+        yield from (path / f for f in files if f.endswith('.py'))
 
 
 if __name__ == '__main__':
