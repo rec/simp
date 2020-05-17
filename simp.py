@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
+"""
+simp.py sorts Python imports simply.
+
+"""
 from pathlib import Path
 import os
 import sys
 import argparse
 import itertools
+from myers import diff
 
 
 def simp():
-    args = parse_args()
+    args = _parse_args()
     all_files = list(_all_files(args.targets))
     changed_files = changed_lines = 0
     first = True
@@ -18,22 +23,19 @@ def simp():
         if lines != sorted_lines:
             changed_files += 1
 
-            sd = _short_diff(lines, sorted_lines, 0)
-            delta = sum(i.startswith('+') for i in sd)
+            mdiff = diff(lines, sorted_lines, context=2, format=True)
+            delta = sum(i.startswith('+') for i in mdiff)
 
             changed_lines += delta
             if first:
                 first = False
             else:
-                print()
-                print(50 * '-')
-                print()
+                print('', 50 * '-', '', sep='\n')
 
             print('%s: %s' % (path, _plural(delta, 'line')))
 
             if args.diff:
-                d = _short_diff(lines, sorted_lines, 2)
-                print('', *d, sep='\n')
+                print('', *mdiff, sep='\n')
 
             if args.execute:
                 with open(path, 'w') as fp:
@@ -65,10 +67,10 @@ def _sort_imports(lines):
         return is_import(s) or is_comment(s)
 
     before = list(itertools.takewhile((lambda s: not is_import(s)), lines))
-    lines = lines[len(before):]
+    lines = lines[len(before) :]
 
     imports = list(itertools.takewhile(still_import, lines))
-    after = lines[len(imports):]
+    after = lines[len(imports) :]
 
     while imports and is_comment(imports[-1]):
         after.insert(0, imports.pop())
@@ -103,73 +105,7 @@ def _one_tree(root):
         yield from (path / f for f in files if f.endswith('.py'))
 
 
-KEEP, INSERT, REMOVE = ' +-'
-
-
-# From https://gist.github.com/adamnew123456/37923cf53f51d6b9af32a539cdfa7cc4
-def _myers_diff(a, b):
-    front = {1: (0, [])}
-
-    for d in range(0, len(a) + len(b) + 1):
-        for k in range(-d, d + 1, 2):
-            go_down = k == -d or (k != d and front[k - 1][0] < front[k + 1][0])
-
-            if go_down:
-                old_x, history = front[k + 1]
-                x = old_x
-            else:
-                old_x, history = front[k - 1]
-                x = old_x + 1
-
-            history = history[:]
-            y = x - k
-
-            if 1 <= y <= len(b) and go_down:
-                history.append((INSERT, b[y - 1]))
-            elif 1 <= x <= len(a):
-                history.append((REMOVE, a[x - 1]))
-
-            while x < len(a) and y < len(b) and a[x] == b[y]:
-                x += 1
-                y += 1
-                history.append((KEEP, a[x - 1]))
-
-            if x >= len(a) and y >= len(b):
-                return history
-            front[k] = (x, history)
-
-    raise ValueError('Could not find edit script')
-
-
-def _short_diff(a, b, frame):
-    diff = _myers_diff(a, b)
-
-    def keepers(items):
-        return list(itertools.takewhile((lambda a: a[0] is KEEP), items))
-
-    prefix = keepers(diff)
-    suffix = list(reversed(keepers(reversed(diff))))
-    if len(prefix) + len(suffix) >= len(diff):
-        return []
-
-    begin = max(0, len(prefix) - frame)
-    end = len(diff) - len(suffix) + frame
-
-    lines = [(a + b).rstrip() for (a, b) in diff[begin:end]]
-
-    def msg(n):
-        return '[...%d line%s skipped...]' % (n, '' if n == 1 else 's')
-
-    if begin > 0:
-        lines.insert(0, msg(begin))
-    e = len(suffix) - frame
-    if e > 0:
-        lines.append(msg(e))
-
-    return lines
-
-
-def parse_args(args=None):
+def _parse_args(args=None):
     p = argparse.ArgumentParser(description=_DESCRIPTION)
 
     p.add_argument('targets', default=['.'], nargs='*', help=_TARGETS_HELP)
