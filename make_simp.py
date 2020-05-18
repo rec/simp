@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import datetime
-import simp
 import myers
+import simp
 
 
 def make_simp():

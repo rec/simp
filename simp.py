@@ -8,45 +8,74 @@ from myers import diff
 import argparse
 import itertools
 import os
+import subprocess
 import sys
 
+_SUB = {'stderr': subprocess.DEVNULL, 'encoding': 'utf8'}
+_MSG = 'Sort import statements with simp'
+assert len(_MSG) <= 50
 
-def simp():
-    args = _parse_args()
-    all_files = list(_all_files(args.targets))
-    changed_files = changed_lines = 0
+
+def simp(targets, commit=False, diffs=False, execute=False, fail=False):
+    if fail and (commit or execute):
+        raise ValueError(
+            '--fail is not compatible with either --commit or --execute'
+        )
+
+    if commit:
+        try:
+            cmd = 'git', 'diff-index', '--quiet', 'HEAD', '--'
+            subprocess.check_output(cmd)
+        except subprocess.CalledProcessError:
+            print(
+                'simp --commit: Cannot commit with changes in the workspace',
+                file=sys.stderr,
+            )
+            return 1
+
+    disordered = 0
     first = True
 
-    for path in all_files:
-        lines = path.read_text().splitlines()
+    files = list(_all_files(targets))
+    for path in files:
+        with open(path) as fp:
+            lines = fp.read().splitlines()
         sorted_lines = _sort_imports(lines)
         if lines != sorted_lines:
-            changed_files += 1
-
-            mdiff = diff(lines, sorted_lines, context=2, format=True)
-            delta = sum(i.startswith('+') for i in mdiff)
-
-            changed_lines += delta
+            disordered += 1
             if first:
                 first = False
-            else:
+            elif diffs:
                 print('', 50 * '-', '', sep='\n')
 
-            print('%s: %s' % (path, _plural(delta, 'line')))
-
-            if args.diff:
+            if diffs:
+                print(path + ':')
+                mdiff = diff(lines, sorted_lines, context=2, format=True)
                 print('', *mdiff, sep='\n')
 
-            if args.execute:
+            if not fail:
+                print(path)
+
+            if execute or commit:
                 with open(path, 'w') as fp:
                     print(*sorted_lines, sep='\n', file=fp)
 
-    if all_files:
+    if fail:
+        return disordered
+
+    if not disordered:
+        print('All sorted')
+        return
+
+    if commit:
+        cmd = 'git', 'commit', '-am', _MSG
         print()
-    print('All files:', len(all_files))
-    print('Imports out of order:')
-    print('  Files:', changed_files)
-    print('  Lines:', changed_lines)
+        print(subprocess.check_output(cmd).decode('utf8'), end='')
+
+    else:
+        msg = '\n%d of %d Python file%s had unsorted includes'
+        s = '' if len(files) == 1 else 's'
+        print(msg % (disordered, len(files), s))
 
 
 def _plural(n, item, plural=None):
@@ -83,7 +112,7 @@ def _sort_imports(lines):
 
 def _all_files(args):
     for arg in args:
-        if os.path.is_dir(arg):
+        if os.path.isdir(arg):
             for i in _one_tree(arg):
                 yield i
         elif arg.endswith('.py') or '.' not in arg:
@@ -109,15 +138,20 @@ def _parse_args(args=None):
     p = argparse.ArgumentParser(description=_DESCRIPTION)
 
     p.add_argument('targets', default=['.'], nargs='*', help=_TARGETS_HELP)
-    p.add_argument('--diff', '-d', action='store_true', help=_DIFF_HELP)
+    p.add_argument('--commit', '-c', action='store_true', help=_COMMIT_HELP)
+    p.add_argument('--diffs', '-d', action='store_true', help=_DIFFS_HELP)
     p.add_argument('--execute', '-x', action='store_true', help=_EXECUTE_HELP)
+    p.add_argument('--fail', '-f', action='store_true', help=_FAIL_HELP)
+    # p.add_argument('--quiet', '-f', action='store_true', help=_QUIET_HELP)
 
     return p.parse_args(args)
 
 
 _DESCRIPTION = 'Sort the import directives in Python source files'
 
-_DIFF_HELP = """If set, print diffs for each changed file"""
+_DIFFS_HELP = """If set, print diffs for each changed file"""
+_FAIL_HELP = """If set, the program fails if any changes need to be made"""
+# _QUIET_HELP = """If set, the program fails if any changes need to be made"""
 
 _TARGETS_HELP = """\
 One or more Python files or directories with Python files.
@@ -128,6 +162,12 @@ _EXECUTE_HELP = """\
 If set, actually make the changes to the Python files, otherwise just
 list them."""
 
+_COMMIT_HELP = """\
+Make the changes and commit them.  Implies --execute
+"""
+
 
 if __name__ == '__main__':
-    simp()
+    code = simp(**vars(_parse_args()))
+    if code:
+        sys.exit(code)
