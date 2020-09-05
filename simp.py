@@ -90,7 +90,7 @@ def _sort_imports(lines):
         return not s or s.startswith('#')
 
     def is_import(s):
-        return s.startswith('from ') or s.startswith('import ')
+        return s.startswith(('from ', 'import '))
 
     def still_import(s):
         return is_import(s) or is_comment(s)
