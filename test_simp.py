@@ -21,6 +21,8 @@ class TestSimp(TestCase):
 
 
 INPUT = """\
+from __future__ import print_function
+
 # something
 # something else
 
@@ -37,6 +39,8 @@ END = 'here'
 """
 
 OUTPUT = """\
+from __future__ import print_function
+
 # something
 # something else
 
@@ -53,6 +57,8 @@ END = 'here'
 """
 
 DIFF = """\
+ from __future__ import print_function
+
  # something
  # something else
 
@@ -71,6 +77,8 @@ DIFF = """\
 """
 
 SHORT_DIFF = """\
+ from __future__ import print_function
+
  # something
  # something else
 
