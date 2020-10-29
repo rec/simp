@@ -16,11 +16,9 @@ _MSG = 'Sort import statements with simp'
 assert len(_MSG) <= 50
 
 
-def simp(targets, commit=False, diffs=False, execute=False, fail=False):
-    if fail and (commit or execute):
-        raise ValueError(
-            '--fail is not compatible with either --commit or --execute'
-        )
+def simp(targets, commit=False, dry_run=True, fail=False):
+    if dry_run:
+        commit = False
 
     if commit:
         try:
@@ -34,34 +32,32 @@ def simp(targets, commit=False, diffs=False, execute=False, fail=False):
             return 1
 
     disordered = 0
-    first = True
-
-    files = list(_all_files(targets))
-    for path in files:
+    for count, path in _all_files(targets):
         with open(path) as fp:
-            lines = fp.read().splitlines()
+            lines = list(fp)
+
         sorted_lines = _sort_imports(lines)
-        if lines != sorted_lines:
-            disordered += 1
-            if first:
-                first = False
-            elif diffs:
+        if lines == sorted_lines:
+            continue
+
+        if fail:
+            return 1
+
+        disordered += 1
+        if dry_run:
+            if count:
                 print('', 50 * '-', '', sep='\n')
 
-            if diffs:
-                print(path + ':')
-                mdiff = diff(lines, sorted_lines, context=2, format=True)
-                print('', *mdiff, sep='\n')
+            print(path + ':')
+            mdiff = diff(lines, sorted_lines, context=2, format=True)
+            print('', *mdiff, sep='\n')
 
-            if not fail:
-                print(path)
+        print(path)
+        if dry_run:
+            continue
 
-            if execute or commit:
-                with open(path, 'w') as fp:
-                    print(*sorted_lines, sep='\n', file=fp)
-
-    if fail:
-        return disordered
+        with open(path, 'w') as fp:
+            print(*sorted_lines, sep='\n', file=fp)
 
     if not disordered:
         print('All sorted')
@@ -70,12 +66,12 @@ def simp(targets, commit=False, diffs=False, execute=False, fail=False):
     if commit:
         cmd = 'git', 'commit', '-am', _MSG
         print()
-        print(subprocess.check_output(cmd).decode('utf8'), end='')
+        print(subprocess.check_output(cmd).decode(), end='')
 
     else:
         msg = '\n%d of %d Python file%s had unsorted includes'
-        s = '' if len(files) == 1 else 's'
-        print(msg % (disordered, len(files), s))
+        s = '' if count == 1 else 's'
+        print(msg % (disordered, count, s))
 
 
 def _plural(n, item, plural=None):
@@ -134,40 +130,45 @@ def _one_tree(root):
                 yield os.path.join(directory, f)
 
 
-def _parse_args(args=None):
-    p = argparse.ArgumentParser(description=_DESCRIPTION)
+def parser():
+    p = argparse.ArgumentParser(description=_DESCRIPTION, epilog=_EPILOG)
 
     p.add_argument('targets', default=['.'], nargs='*', help=_TARGETS_HELP)
     p.add_argument('--commit', '-c', action='store_true', help=_COMMIT_HELP)
-    p.add_argument('--diffs', '-d', action='store_true', help=_DIFFS_HELP)
-    p.add_argument('--execute', '-x', action='store_true', help=_EXECUTE_HELP)
+    p.add_argument('--dry_run', '-d', action='store_true', help=_DRY_RUN_HELP)
     p.add_argument('--fail', '-f', action='store_true', help=_FAIL_HELP)
-    # p.add_argument('--quiet', '-f', action='store_true', help=_QUIET_HELP)
 
-    return p.parse_args(args)
+    return p
 
 
-_DESCRIPTION = 'Sort the import directives in Python source files'
+def parse_args(args=None):
+    return parser().parse_args(args)
 
-_DIFFS_HELP = """If set, print diffs for each changed file"""
-_FAIL_HELP = """If set, the program fails if any changes need to be made"""
-# _QUIET_HELP = """If set, the program fails if any changes need to be made"""
+
+_DESCRIPTION = """
+Sort the import directives in Python files, excluding __future__.
+"""
+
+_EPILOG = """I wanted to sort my Python includes with no fuss.  ``simp`` finds
+the first block of unindented import statements, and sorts them.  Any comments
+between import lines bubble up to the top in their original order."""
+
+_FAIL_HELP = """If set, the program fails if any changes need to be made.
+This is useful for a commit hook to check if all imports are sorted."""
 
 _TARGETS_HELP = """\
 One or more Python files or directories with Python files.
 Without arguments, runs simp on the current directory.
 """
 
-_EXECUTE_HELP = """\
-If set, actually make the changes to the Python files, otherwise just
-list them."""
+_DRY_RUN_HELP = """\
+If set, do not make the changes to the Python files, but just
+list the diffs."""
 
-_COMMIT_HELP = """\
-Make the changes and commit them.  Implies --execute
-"""
+_COMMIT_HELP = 'Git commit the changes'
 
 
 if __name__ == '__main__':
-    code = simp(**vars(_parse_args()))
+    code = simp(**vars(parse_args()))
     if code:
         sys.exit(code)
