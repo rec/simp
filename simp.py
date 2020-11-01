@@ -146,7 +146,7 @@ def parse_args(args=None):
 
 
 _DESCRIPTION = """
-Sort the import directives in Python files, excluding __future__.
+Sort imports in Python files, leaving ``from __future__`` imports at the top.
 """
 
 _EPILOG = """I wanted to sort my Python includes with no fuss.  ``simp`` finds
