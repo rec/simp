@@ -1,3 +1,9 @@
+## v1.0.0 - 20/11/01
+
+* Much improved README.rst
+* Combine --dry_run and --execute
+* Added pyproject.toml
+
 ## v0.9.3 - 20/10/07
 
 * Enable Python 3.9
