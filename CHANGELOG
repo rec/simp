@@ -1,3 +1,8 @@
+## v1.0.2 - 20/11/07
+
+* Update simp standalone
+* Add doks settings to pyproject.toml
+
 ## v1.0.1 - 20/11/04
 
 * Change status to Production/Stable in setup.py
