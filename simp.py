@@ -32,7 +32,7 @@ def simp(targets, commit=False, dry_run=True, fail=False):
             return 1
 
     disordered = 0
-    for count, path in _all_files(targets):
+    for count, path in enumerate(_all_files(targets)):
         with open(path) as fp:
             lines = list(fp)
 
