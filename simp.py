@@ -91,6 +91,12 @@ def _sort_imports(lines):
     def still_import(s):
         return is_import(s) or is_comment(s)
 
+    def sort_one(s):
+        # Either import a, b or from m import a, b
+        a = s.rsplit('import ', maxsplit=1)
+        a[-1] = ', '.join(sorted(i.strip() for i in a[-1].split(',')))
+        return 'import '.join(a)
+
     before = list(itertools.takewhile((lambda s: not is_import(s)), lines))
     lines = lines[len(before) :]
 
@@ -101,7 +107,7 @@ def _sort_imports(lines):
         after.insert(0, imports.pop())
 
     comments = [s for s in imports if is_comment(s)]
-    imports = [s for s in imports if not is_comment(s)]
+    imports = [sort_one(s) for s in imports if not is_comment(s)]
 
     return before + comments + sorted(set(imports)) + after
 

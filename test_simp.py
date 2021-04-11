@@ -26,11 +26,13 @@ from __future__ import print_function
 # something
 # something else
 
+import six, five
 from a import b
 import foo
 # comment goes ABOVE
 
 from d import f
+from one import two, three as seven
 import foo.bar
 
 # comment goes BELOW
@@ -48,6 +50,8 @@ from __future__ import print_function
 
 from a import b
 from d import f
+from one import three as seven, two
+import five, six
 import foo
 import foo.bar
 
