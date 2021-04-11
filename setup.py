@@ -1,4 +1,4 @@
-__version__ = '1.0.3'
+__version__ = '2.0.0'
 
 _classifiers = [
     'Development Status :: 5 - Production/Stable',
